@@ -1,0 +1,83 @@
+{
+  "provisioners": [
+    {
+      "type": "file",
+      "source": "niftycloud-scripts",
+      "destination": "/tmp"
+    },
+    {
+      "type": "shell",
+      "override": {
+        "vmware-iso": {
+          "scripts": [
+            "scripts/base.sh",
+            "scripts/vmware.sh",
+            "scripts/niftycloud.sh"
+          ]
+        }
+      }
+    }
+  ],
+  "post-processors": [
+  ],
+  "builders": [
+    {
+      "type": "vmware-iso",
+      "boot_command": [
+        "<enter>",
+        "<wait10><wait5>",
+        "s",
+        "mkdir -p /tmp/bsdinstall_etc<enter>",
+        "dhclient vmx0<enter>",
+        "<wait5>",
+        "fetch -o /tmp/installerconfig http://{{ .HTTPIP }}:{{ .HTTPPort }}/installerconfig.sh<enter>",
+        "<wait>",
+        "bsdinstall script /tmp/installerconfig<enter>",
+        "<wait10><wait10><wait10>",
+        "shutdown -r now<enter>"
+      ],
+      "boot_wait": "10s",
+      "disk_size": 30720,
+      "disk_type_id": "thin",
+      "guest_os_type": "freebsd-64",
+      "vm_name": "FreeBSD-10.0-64bit",
+      "vmdk_name": "FreeBSD-10.0-64bit",
+      "http_directory": "http",
+      "iso_checksum": "2a37b5c6143170a0f840cbd69596fa8ac5392c48",
+      "iso_checksum_type": "sha1",
+      "iso_url": "http://ftp.jp.freebsd.org/pub/FreeBSD/releases/ISO-IMAGES/10.0/FreeBSD-10.0-RELEASE-amd64-disc1.iso",
+      "ssh_username": "root",
+      "ssh_key_path": "../ssh_key/niftycloud_key",
+      "ssh_port": 22,
+      "ssh_wait_timeout": "10000s",
+      "shutdown_command": "echo 'shutdown -p now'|su -",
+      "output_directory":"FreeBSD-10.0-64bit",
+      "vmx_data": {
+        "cpuid.coresPerSocket": "1",
+        "memsize": "512",
+        "numvcpus": "1",
+        "virtualhw.version": "8",
+        "ethernet0.present": "TRUE",
+        "ethernet0.startConnected": "TRUE",
+        "ethernet0.virtualDev": "vmxnet3",
+        "ethernet0.networkName": "{{user `network1`}}",
+        "ethernet1.present": "TRUE",
+        "ethernet1.startConnected": "TRUE",
+        "ethernet1.virtualDev": "vmxnet3",
+        "ethernet1.networkName": "{{user `network2`}}"
+      },
+      "remote_type": "esx5",
+      "remote_host": "{{user `remote_host`}}",
+      "remote_datastore": "{{user `remote_datastore`}}",
+      "remote_username": "root",
+      "remote_password": "password"
+    }
+  ],
+  "variables": {
+    "remote_host": "",
+    "remote_datastore": "",
+    "network1": "",
+    "network2": "",
+    "output_directory":"FreeBSD-10.0-64bit"
+  }
+}

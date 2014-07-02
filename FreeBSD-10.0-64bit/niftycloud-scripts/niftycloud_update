@@ -1,0 +1,55 @@
+#!/bin/sh
+# PROVIDE: niftycloud_update
+
+if [ `uname` = "FreeBSD" ]; then
+    SCRIPT_PATH="/etc/rc.d/niftycloud_init"
+else
+    SCRIPT_PATH="/etc/init.d/niftycloud_init"
+fi
+
+VMWARE_GUESTD=""
+if [ -x /usr/sbin/vmware-guestd ]; then
+    VMWARE_GUESTD="/usr/sbin/vmware-guestd"
+elif [ -x /usr/sbin/vmtoolsd ]; then
+    VMWARE_GUESTD="/usr/sbin/vmtoolsd"
+elif [ -x /usr/local/sbin/vmware-guestd ]; then
+    VMWARE_GUESTD="/usr/local/sbin/vmware-guestd"
+elif [ -x /usr/local/sbin/vmtoolsd ]; then
+    VMWARE_GUESTD="/usr/local/sbin/vmtoolsd"
+elif [ -x /usr/local/bin/vmware-guestd ]; then
+    VMWARE_GUESTD="/usr/local/bin/vmware-guestd"
+elif [ -x /usr/local/bin/vmtoolsd ]; then
+    VMWARE_GUESTD="/usr/local/bin/vmtoolsd"
+else
+        exit 1
+fi
+
+SCRIPT_VERSION=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.script_version' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.script_version undefined!"
+    exit 0
+fi
+echo "guestinfo.script_version: $SCRIPT_VERSION"
+
+SCRIPT=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.script' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.script undefined!"
+    exit 0
+fi
+echo "guestinfo.script: $SCRIPT"
+
+
+if [ -f $SCRIPT_PATH ]; then
+    grep "VERSION" $SCRIPT_PATH
+    if [ $? -ne 0 ]; then
+        echo "script version undefined!"
+    fi
+    version=$(grep "VERSION" $SCRIPT_PATH)
+    eval $version
+    echo $VERSION
+    if [ $VERSION -lt $SCRIPT_VERSION ]; then
+        echo "script update process executing..."
+        ${VMWARE_GUESTD} --cmd 'info-get guestinfo.script' | openssl enc -d -base64 | gzip -d > $SCRIPT_PATH
+
+    fi
+fi

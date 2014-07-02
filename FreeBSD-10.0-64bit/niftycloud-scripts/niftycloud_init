@@ -1,0 +1,116 @@
+#!/bin/sh
+# PROVIDE: niftycloud_init
+# REQUIRE: niftycloud_update
+VERSION="1"
+
+VMWARE_GUESTD=""
+if [ -x /usr/sbin/vmware-guestd ]; then
+    VMWARE_GUESTD="/usr/sbin/vmware-guestd"
+elif [ -x /usr/sbin/vmtoolsd ]; then
+    VMWARE_GUESTD="/usr/sbin/vmtoolsd"
+elif [ -x /usr/local/sbin/vmware-guestd ]; then
+    VMWARE_GUESTD="/usr/local/sbin/vmware-guestd"
+elif [ -x /usr/local/sbin/vmtoolsd ]; then
+    VMWARE_GUESTD="/usr/local/sbin/vmtoolsd"
+elif [ -x /usr/local/bin/vmware-guestd ]; then
+    VMWARE_GUESTD="/usr/local/bin/vmware-guestd"
+elif [ -x /usr/local/bin/vmtoolsd ]; then
+    VMWARE_GUESTD="/usr/local/bin/vmtoolsd"
+else
+        exit 1
+fi
+
+INIT=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.init' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.init undefined!"
+    INIT="0"
+fi
+echo "guestinfo.init: $INIT"
+
+HOSTNAME=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.hostname' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.hostname undefined!"
+fi
+echo "guestinfo.hostname: $HOSTNAME"
+
+SSH_AUTHORIZED_KEY=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.ssh_authorized_key' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.ssh_authorized_key undefined!"
+fi
+echo "guestinfo.ssh_authorized_key: $SSH_AUTHORIZED_KEY"
+
+LOG_CLEANUP=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.log_cleanup' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.log_cleanup undefined!"
+    LOG_CLEANUP="0"
+fi
+echo "guestinfo.log_cleanup: $LOG_CLEANUP"
+
+USER_DATA=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.user_data' 2>&1)
+if [ $? -ne 0 ]; then
+    echo "guestinfo.user_data undefined!"
+    USER_DATA=""
+fi
+echo "guestinfo.user_data: $USER_DATA"
+
+## initialize os configuration.
+if [ $INIT = "1" ]; then
+    mkdir -p /root/.ssh && chmod 700 /root/.ssh;
+    echo $?
+    echo $SSH_AUTHORIZED_KEY > /root/.ssh/authorized_keys
+    echo $?
+    if [ `uname` = "FreeBSD" ]; then
+        cd /etc && sed -e "/^ifconfig_[^0-9]*2=/d" rc.conf > rc.conf.new && mv -f rc.conf.new rc.conf 
+    else
+        if [ -f /etc/sysconfig/network-scripts/ifcfg-eth2 ]; then
+            /bin/rm /etc/sysconfig/network-scripts/ifcfg-eth2
+            echo $?
+        fi
+        cd /etc &&  sed -e "/^alias eth2/d" modprobe.conf > modprobe.new  && mv -f modprobe.new modprobe.conf
+    fi
+    echo $?
+    if [ $LOG_CLEANUP = "1" ]; then
+        /bin/cp -f /dev/null /var/log/debug && /bin/cp -f /dev/null /var/log/debug.log && /bin/cp -f /dev/null /var/log/devd && /bin/cp -f /dev/null /var/log/devd.log && /bin/cp -f /dev/null /var/log/utx.log && /bin/cp -f /dev/null /var/log/utx.lastlogin && /bin/cp -f /dev/null /var/log/message && /bin/cp -f /dev/null /var/log/security && /bin/cp -f /dev/null /var/log/wtmp && /bin/cp -f /dev/null /var/log/maillog && /bin/cp -f /dev/null /var/log/cron && (if [ -d /var/log/audit ]; then /bin/cp -f /dev/null /var/log/audit/audit.log; fi) && /bin/cp -f /dev/null /var/log/auth.log && /bin/cp -f /dev/null /var/log/xferlog  && /bin/cp -f /dev/null /var/log/lpd-errs && /bin/cp -f /dev/null /var/log/ppp.log && /bin/cp -f /dev/null /var/log/userlog  && export HISTSIZE=0
+        echo $?
+        /bin/rm -f /var/log/bsdinstall_log && /bin/rm -f /var/log/boot.log* && /bin/rm -f /var/log/lastlog* && /bin/rm -f /var/log/messages* && /bin/rm -f /var/log/secure* && /bin/rm -f /var/log/wtmp* && /bin/rm -f /var/log/maillog* && /bin/rm -f /var/log/cron* && (if [ -d /var/log/audit ]; then /bin/rm -f /var/log/audit/audit.log*; fi) && /bin/cp -f /dev/null /var/log/auth.log*
+        echo $?
+    fi
+    echo $?
+
+    if [ -f /etc/shadow ]; then
+        SHADOW_FILE="/etc/shadow"
+    else
+        SHADOW_FILE="/etc/master.passwd"
+    fi
+    chmod 755 $SHADOW_FILE
+    sed -i -e "s/^root:[^:]*:/root:*NIFTYCLOUD*:/g" $SHADOW_FILE
+    echo $?
+    chmod 400 $SHADOW_FILE
+    if [ $SHADOW_FILE = "/etc/master.passwd" ]; then
+        pwd_mkdb -p /etc/master.passwd
+        pwd_mkdb /etc/master.passwd
+    fi
+
+
+    ${VMWARE_GUESTD} --cmd 'info-set guestinfo.init 0'
+    ${VMWARE_GUESTD} --cmd 'info-set guestinfo.log_cleanup 0'
+fi
+
+USER_DATA_FLAG=$(${VMWARE_GUESTD} --cmd 'info-get guestinfo.set_user_data')
+if [ "$USER_DATA_FLAG" = "1" ]; then
+    echo "$USER_DATA" | openssl enc -d -base64 > ~/.niftycloud_user_data
+    awk 'NR==1{print $1}' ~/.niftycloud_user_data | grep ^\#\!
+    if [ $? -eq 0 ]; then
+        tr -d "\r" < ~/.niftycloud_user_data > ~/.niftycloud_user_data1
+        mv ~/.niftycloud_user_data1 ~/.niftycloud_user_data
+        chmod 755 ~/.niftycloud_user_data
+        logger -p user.notice "$(~/.niftycloud_user_data 2>&1)"
+        # logger -p user.info "execute ~/.niftycloud_user_data"
+    fi
+    ${VMWARE_GUESTD} --cmd 'info-set guestinfo.set_user_data 0'
+else
+    rm -rf ~/.niftycloud_user_data
+fi
+
+${VMWARE_GUESTD} --cmd 'info-set guestinfo.init_result 1'
+exit $?
